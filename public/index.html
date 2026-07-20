@@ -77,6 +77,24 @@
     padding: 24px; z-index: 10;
   }
   .lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  .settings-card { margin-bottom: 24px; }
+  .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .settings-row + .settings-row { margin-top: 16px; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-track {
+    position: absolute; cursor: pointer; inset: 0;
+    background: #c4c0c9; border-radius: 24px; transition: 0.2s;
+  }
+  .switch-track::before {
+    content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s;
+  }
+  .switch input:checked + .switch-track { background: var(--primary); }
+  .switch input:checked + .switch-track::before { transform: translateX(20px); }
+  .settings-saved { color: #2e7d32; font-size: 13px; margin-top: 12px; }
+  .settings-time-row { display: flex; align-items: center; gap: 12px; }
+  .settings-time-row input[type="time"] { width: auto; flex: 0; }
 </style>
 </head>
 <body>
@@ -98,6 +116,31 @@
     <div class="top-row">
       <span id="whoami" style="color: var(--text-muted); font-size: 13px;"></span>
       <button class="secondary" id="logoutBtn">Выйти</button>
+    </div>
+
+    <!-- Настройки напоминания — управляется удалённо, телефон подхватывает изменения
+         при следующей фоновой синхронизации (см. CheckServerReminderTimeUseCase в Android-коде) -->
+    <div class="card settings-card">
+      <div class="settings-row">
+        <div>
+          <strong>Напоминание включено</strong>
+          <div style="color: var(--text-muted); font-size: 12px; margin-top: 2px;">
+            Приложение подхватит изменение автоматически, без переустановки
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="reminderEnabledToggle" />
+          <span class="switch-track"></span>
+        </label>
+      </div>
+
+      <div class="settings-row settings-time-row">
+        <label style="margin: 0;">Время напоминания</label>
+        <input type="time" id="reminderTimeInput" />
+        <button id="saveReminderSettingsBtn" style="margin: 0;">Сохранить</button>
+      </div>
+
+      <div id="reminderSettingsStatus" class="hidden"></div>
     </div>
 
     <div class="toolbar">
@@ -163,7 +206,59 @@
   function showScreen(loggedIn) {
     el('loginScreen').classList.toggle('hidden', loggedIn);
     el('mainScreen').classList.toggle('hidden', !loggedIn);
+    if (loggedIn) {
+      loadReminderSettings();
+    }
   }
+
+  /** Подтягивает текущее состояние с backend — чтобы форма не показывала устаревшие значения. */
+  async function loadReminderSettings() {
+    const status = el('reminderSettingsStatus');
+    status.classList.add('hidden');
+    try {
+      const settings = await api('/reminder-settings');
+      el('reminderEnabledToggle').checked = settings.isEnabled;
+      el('reminderTimeInput').value = settings.reminderTime; // уже в формате "HH:mm"
+    } catch (e) {
+      status.textContent = 'Не удалось загрузить настройки: ' + e.message;
+      status.className = 'error';
+      status.classList.remove('hidden');
+    }
+  }
+
+  el('saveReminderSettingsBtn').addEventListener('click', async () => {
+    const status = el('reminderSettingsStatus');
+    const btn = el('saveReminderSettingsBtn');
+    const time = el('reminderTimeInput').value;
+
+    if (!time) {
+      status.textContent = 'Укажите время';
+      status.className = 'error';
+      status.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true;
+    status.classList.add('hidden');
+    try {
+      await api('/reminder-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          reminderTime: time,
+          isEnabled: el('reminderEnabledToggle').checked,
+        }),
+      });
+      status.textContent = '✅ Сохранено. Телефон подхватит изменение при следующей синхронизации.';
+      status.className = 'settings-saved';
+      status.classList.remove('hidden');
+    } catch (e) {
+      status.textContent = 'Ошибка: ' + e.message;
+      status.className = 'error';
+      status.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   el('loginBtn').addEventListener('click', async () => {
     el('loginError').classList.add('hidden');
