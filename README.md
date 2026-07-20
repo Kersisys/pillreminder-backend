@@ -28,6 +28,25 @@ Node.js + Express + TypeScript + PostgreSQL (через Prisma) + Cloudinary.
    ```
 5. Проверить, что сервер жив: `GET http://localhost:3000/health` → `{"status":"ok"}`
 
+## Push-уведомления (FCM) — мгновенная синхронизация времени
+
+Сервер может мгновенно "достучаться" до телефона при изменении времени напоминания
+(вместо ожидания следующей плановой синхронизации), используя Firebase Cloud Messaging.
+
+1. Firebase Console → Project Settings → Service accounts → **Generate new private key**
+   — скачается JSON-файл (это не тот `google-services.json`, что на Android-стороне,
+   отдельный файл, с другими правами, для сервера).
+2. Закодировать его в base64 целиком:
+   - Mac/Linux: `base64 -i service-account.json`
+   - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("service-account.json"))`
+3. Записать результат в `.env` одной строкой:
+   ```
+   FIREBASE_SERVICE_ACCOUNT_BASE64="<результат base64>"
+   ```
+4. Без этой переменной сервер продолжает работать как раньше — просто push не
+   отправляется, и клиент по-прежнему узнаёт об изменениях через обычную
+   периодическую синхронизацию (полностью обратная совместимость).
+
 ## Быстрый бесплатный деплой (без своего сервера)
 
 - **База данных**: [Neon](https://neon.tech) или [Supabase](https://supabase.com) — бесплатный PostgreSQL, дают готовую `DATABASE_URL`.
@@ -50,7 +69,8 @@ Authorization: Bearer <accessToken>
 | POST | `/api/confirmations` | `{ date, confirmedAt, photoUrl, photoPublicId, status }` |
 | GET | `/api/confirmations?from=&to=` | список подтверждений (для восстановления истории) |
 | GET | `/api/reminder-settings` | → `{ reminderTime, isEnabled, repeatIntervalMinutes, updatedAt }` |
-| PUT | `/api/reminder-settings` | `{ reminderTime, isEnabled }` — обновление времени "от сервера" |
+| PUT | `/api/reminder-settings` | `{ reminderTime, isEnabled }` — обновление времени "от сервера" (дополнительно шлёт push, если у пользователя зарегистрирован fcmToken) |
+| POST | `/api/push-token` | `{ fcmToken }` — регистрация/обновление FCM-токена текущего устройства |
 
 ## Сценарий загрузки фото с Android (полностью)
 
@@ -146,3 +166,4 @@ Tesseract.js на некрупных фото этого более чем до�
 Токен хранится только в `sessionStorage` (не `localStorage`) — исчезает при
 закрытии вкладки, чтобы не оставлять токен доступа к медицинским данным
 надолго в браузере.
+

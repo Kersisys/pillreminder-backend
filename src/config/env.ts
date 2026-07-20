@@ -12,6 +12,15 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1),
   CLOUDINARY_API_SECRET: z.string().min(1),
   PORT: z.coerce.number().default(3000),
+
+  // Service Account ключ Firebase (JSON, целиком) — закодирован в base64, чтобы не
+  // мучиться с многострочным private_key и экранированием кавычек в .env.
+  // Получить: Firebase Console -> Project Settings -> Service accounts ->
+  // Generate new private key, затем: base64 -i service-account.json (Mac/Linux)
+  // или certutil -encode (Windows), убрать переносы строк из вывода certutil.
+  // Оставлено опциональным: без него сервер всё равно поднимается и работает —
+  // просто push-уведомления не отправляются (см. push.service.ts).
+  FIREBASE_SERVICE_ACCOUNT_BASE64: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

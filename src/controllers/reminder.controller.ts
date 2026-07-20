@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db/prisma';
 import { ApiError } from '../middleware/errorHandler';
+import { sendReminderUpdatedPush } from '../services/push.service';
 
 /**
  * Android-клиент периодически опрашивает этот эндпоинт (не пуш — см. обсуждение
@@ -48,6 +49,13 @@ export async function updateReminderSettings(req: Request, res: Response) {
       reminderUpdatedAt: new Date(),
     },
   });
+
+  if (user.fcmToken) {
+    // Не await'им намеренно рядом с res.json — ответ клиенту (обычно это
+    // веб-панель) не должен ждать доставки push на телефон, а сама
+    // sendReminderUpdatedPush уже сама ловит свои ошибки и не бросает исключения.
+    void sendReminderUpdatedPush(user.fcmToken);
+  }
 
   res.json({
     reminderTime: user.reminderTime,
