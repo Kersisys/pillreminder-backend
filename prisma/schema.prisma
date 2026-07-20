@@ -1,0 +1,51 @@
+// Схема соответствует тому, что уже есть на Android-клиенте (см. DayStatus, DayRecord):
+// поле status использует те же строковые коды ("pill_taken", "menstruation"),
+// чтобы не приходилось писать отдельный маппинг туда-обратно.
+
+generator client {
+  provider      = "prisma-client-js"
+  // "native" — для локальной разработки, "rhel-openssl-3.0.x" — под окружение
+  // serverless-функций Vercel (Amazon Linux, отличается от Windows/Mac по умолчанию).
+  // Без этого на Vercel Prisma Client может не найти нужный бинарник движка.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  passwordHash String
+  createdAt DateTime @default(now())
+
+  // Настройки напоминания хранятся прямо на пользователе — они всегда одни на аккаунт.
+  reminderTime          String   @default("09:00") // "HH:mm", 24-часовой формат
+  reminderEnabled       Boolean  @default(true)
+  repeatIntervalMinutes Int      @default(10)
+  // Обновляется при каждом изменении времени (в т.ч. с сервера) — клиент сравнивает
+  // это поле со своей последней известной версией, чтобы понять, менялось ли что-то.
+  reminderUpdatedAt     DateTime @default(now())
+
+  confirmations Confirmation[]
+}
+
+model Confirmation {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date          String   // ISO-дата, "2026-07-17" — один день = одна запись на пользователя
+  confirmedAt   String   // время подтверждения, "HH:mm:ss"
+  photoUrl      String   // secure_url из Cloudinary
+  photoPublicId String   // public_id из Cloudinary — нужен, чтобы можно было удалить фото
+  status        String   @default("pill_taken")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+}

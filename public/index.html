@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PillReminder — админ-панель</title>
+<style>
+  :root {
+    --primary: #6750a4;
+    --bg: #faf9fc;
+    --card-bg: #ffffff;
+    --border: #e3e0e8;
+    --text: #1c1b1f;
+    --text-muted: #6b6670;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 20px; margin-bottom: 24px; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; margin-top: 12px; }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 16px;
+    margin-right: 8px;
+  }
+  button.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .error { color: #b3261e; font-size: 13px; margin-top: 12px; }
+  .toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  .toolbar > div { flex: 1; min-width: 160px; }
+  .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .photo-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-bg);
+    cursor: pointer;
+  }
+  .photo-card img { width: 100%; height: 140px; object-fit: cover; display: block; background: #eee; }
+  .photo-card .meta { padding: 8px 10px; font-size: 12px; color: var(--text-muted); }
+  .photo-card .meta strong { display: block; color: var(--text); font-size: 13px; }
+  .empty { color: var(--text-muted); padding: 32px 0; text-align: center; }
+  .hidden { display: none !important; }
+  /* Простой лайтбокс для просмотра фото в полном размере по клику */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 10;
+  }
+  .lightbox img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>PillReminder — история подтверждений</h1>
+
+  <!-- Экран логина -->
+  <div id="loginScreen" class="card">
+    <label>Email</label>
+    <input id="loginEmail" type="email" placeholder="test@example.com" />
+    <label>Пароль</label>
+    <input id="loginPassword" type="password" placeholder="••••••••" />
+    <button id="loginBtn">Войти</button>
+    <div id="loginError" class="error hidden"></div>
+  </div>
+
+  <!-- Экран после логина -->
+  <div id="mainScreen" class="hidden">
+    <div class="top-row">
+      <span id="whoami" style="color: var(--text-muted); font-size: 13px;"></span>
+      <button class="secondary" id="logoutBtn">Выйти</button>
+    </div>
+
+    <div class="toolbar">
+      <div>
+        <label>Показать</label>
+        <button id="showAllBtn">Все фото</button>
+      </div>
+      <div>
+        <label>Или конкретная дата</label>
+        <input id="dateInput" type="date" />
+      </div>
+      <div style="flex: 0;">
+        <button id="showDateBtn" style="margin-top: 21px;">Показать</button>
+      </div>
+    </div>
+
+    <div id="galleryStatus" class="empty hidden"></div>
+    <div id="gallery" class="grid"></div>
+  </div>
+</div>
+
+<div id="lightbox" class="lightbox hidden">
+  <img id="lightboxImg" src="" alt="" />
+</div>
+
+<script>
+  // Токен храним только в sessionStorage (не localStorage) — это чувствительные
+  // медицинские данные, не хотим, чтобы токен переживал закрытие вкладки надолго.
+  const API_BASE = window.location.origin + '/api';
+
+  const el = (id) => document.getElementById(id);
+
+  function getToken() { return sessionStorage.getItem('token'); }
+  function setToken(token) { sessionStorage.setItem('token', token); }
+  function clearToken() { sessionStorage.removeItem('token'); }
+
+  /**
+   * Превращает полноразмерный Cloudinary secure_url в маленькое превью,
+   * добавляя трансформацию прямо в URL (w_200,h_200,c_fill) — это то, что
+   * реально экономит трафик/квоту Cloudinary в режиме "показать все фото":
+   * грузятся не оригиналы, а лёгкие превью, оригинал — только по клику.
+   */
+  function toThumbnailUrl(secureUrl) {
+    return secureUrl.replace('/upload/', '/upload/w_200,h_200,c_fill,q_auto/');
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('Ошибка ' + res.status));
+    }
+    return res.json();
+  }
+
+  function showScreen(loggedIn) {
+    el('loginScreen').classList.toggle('hidden', loggedIn);
+    el('mainScreen').classList.toggle('hidden', !loggedIn);
+  }
+
+  el('loginBtn').addEventListener('click', async () => {
+    el('loginError').classList.add('hidden');
+    try {
+      const data = await api('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: el('loginEmail').value,
+          password: el('loginPassword').value,
+        }),
+      });
+      setToken(data.accessToken);
+      el('whoami').textContent = el('loginEmail').value;
+      showScreen(true);
+    } catch (e) {
+      el('loginError').textContent = e.message;
+      el('loginError').classList.remove('hidden');
+    }
+  });
+
+  el('logoutBtn').addEventListener('click', () => {
+    clearToken();
+    showScreen(false);
+  });
+
+  async function loadConfirmations(params) {
+    const gallery = el('gallery');
+    const status = el('galleryStatus');
+    gallery.innerHTML = '';
+    status.classList.remove('hidden');
+    status.textContent = 'Загрузка...';
+
+    try {
+      const query = new URLSearchParams(params).toString();
+      const items = await api('/confirmations' + (query ? '?' + query : ''));
+
+      if (items.length === 0) {
+        status.textContent = 'Записей не найдено.';
+        return;
+      }
+      status.classList.add('hidden');
+
+      for (const item of items) {
+        const card = document.createElement('div');
+        card.className = 'photo-card';
+        card.innerHTML = `
+          <img src="${toThumbnailUrl(item.photoUrl)}" loading="lazy" alt="${item.date}" />
+          <div class="meta"><strong>${item.date}</strong>${item.confirmedAt} · ${item.status}</div>
+        `;
+        card.querySelector('img').addEventListener('click', () => {
+          el('lightboxImg').src = item.photoUrl; // полный размер — только по клику
+          el('lightbox').classList.remove('hidden');
+        });
+        gallery.appendChild(card);
+      }
+    } catch (e) {
+      status.classList.remove('hidden');
+      status.textContent = 'Ошибка: ' + e.message;
+    }
+  }
+
+  el('showAllBtn').addEventListener('click', () => loadConfirmations({}));
+  el('showDateBtn').addEventListener('click', () => {
+    const date = el('dateInput').value;
+    if (!date) return;
+    loadConfirmations({ from: date, to: date });
+  });
+
+  el('lightbox').addEventListener('click', () => el('lightbox').classList.add('hidden'));
+
+  // Если токен уже есть в этой вкладке (например, после обновления страницы) — не просим логиниться заново.
+  if (getToken()) {
+    el('whoami').textContent = '(сессия восстановлена)';
+    showScreen(true);
+  }
+</script>
+</body>
+</html>
