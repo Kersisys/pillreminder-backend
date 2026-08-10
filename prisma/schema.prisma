@@ -19,6 +19,7 @@ model User {
   reminderUpdatedAt     DateTime       @default(now())
   fcmToken              String?
   confirmations         Confirmation[]
+  pillPlans             PillPlan[]
 }
 
 model Confirmation {
@@ -34,5 +35,33 @@ model Confirmation {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+  @@index([userId])
+}
+
+/// Курс (упаковка) КОК — раздел 9-13/45 ТЗ. Универсальная схема activePills+placeboPills
+/// (не хардкодим 24+4 — в будущем поддержит и 21+7, и 28+0), плюс brandName для истории
+/// смены препарата (было явно запрошено пользователем отдельно от базового ТЗ).
+///
+/// "Текущий" курс — запись с максимальным (startDate, createdAt) для пользователя,
+/// остальные — история; отдельного поля/флага "активный" нет, вычисляется на лету
+/// (тот же принцип "план вычисляется, а не хранится", что и для дней цикла, раздел 46).
+///
+/// startDate хранится как String (не DateTime) — та же конвенция, что и Confirmation.date,
+/// это чистая календарная дата без часового пояса/времени, а не момент времени.
+///
+/// Специально БЕЗ @@unique([userId, startDate]) — пользователь может законно завести
+/// вторую запись на ту же дату (например, исправляя опечатку в названии препарата),
+/// это уже поддерживается на Android через tie-break по времени вставки.
+model PillPlan {
+  id           String   @id @default(uuid())
+  userId       String
+  brandName    String
+  activePills  Int      @default(24)
+  placeboPills Int      @default(4)
+  startDate    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }

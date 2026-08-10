@@ -7,6 +7,7 @@ import { cloudinaryRouter } from './routes/cloudinary.routes';
 import { confirmationsRouter } from './routes/confirmations.routes';
 import { pushRouter } from './routes/push.routes';
 import { reminderRouter } from './routes/reminder.routes';
+import { pillPlanRouter } from './routes/pillPlan.routes';
 
 // Дополнительная защита сверх asyncHandler — на случай ошибки вне Express-роутинга.
 // В serverless-режиме (Vercel) каждый вызов — отдельный процесс, поэтому здесь это
@@ -43,6 +44,7 @@ app.use('/api/cloudinary', cloudinaryRouter);
 app.use('/api/confirmations', confirmationsRouter);
 app.use('/api/reminder-settings', reminderRouter);
 app.use('/api/push-token', pushRouter);
+app.use('/api/pill-plan', pillPlanRouter);
 
 // Обработчик ошибок обязательно подключается последним — Express находит его
 // по количеству аргументов (4), поэтому порядок регистрации middleware важен.
