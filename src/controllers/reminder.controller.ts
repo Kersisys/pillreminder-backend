@@ -24,6 +24,14 @@ export async function getReminderSettings(req: Request, res: Response) {
 const updateSchema = z.object({
   reminderTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Формат времени — HH:mm'),
   isEnabled: z.boolean(),
+  // Задержка между повторными звонками будильника, если фото так и не отправлено
+  // (см. AlarmSoundService в Android-коде — 3 часа "пока не открыли" остаются
+  // фиксированными, настраивается именно этот интервал). Опциональное поле —
+  // старые клиенты (или ручные запросы без него) не должны ломаться; при
+  // отсутствии сохраняем как было. Границы: меньше 1 минуты бессмысленно
+  // (будильник звонил бы практически без пауз), больше 60 — уже не "напоминание
+  // почаще", а фактически новый ежедневный будильник на другое время.
+  repeatIntervalMinutes: z.number().int().min(1).max(60).optional(),
 });
 
 /**
@@ -46,6 +54,7 @@ export async function updateReminderSettings(req: Request, res: Response) {
     data: {
       reminderTime: data.reminderTime,
       reminderEnabled: data.isEnabled,
+      ...(data.repeatIntervalMinutes !== undefined ? { repeatIntervalMinutes: data.repeatIntervalMinutes } : {}),
       reminderUpdatedAt: new Date(),
     },
   });
