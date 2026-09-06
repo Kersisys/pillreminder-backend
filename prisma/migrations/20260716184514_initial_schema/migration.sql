@@ -1,0 +1,45 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reminderTime" TEXT NOT NULL DEFAULT '09:00',
+    "reminderEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "repeatIntervalMinutes" INTEGER NOT NULL DEFAULT 10,
+    "reminderUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fcmToken" TEXT,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Confirmation" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "date" TEXT NOT NULL,
+    "confirmedAt" TEXT NOT NULL,
+    "photoUrl" TEXT NOT NULL,
+    "photoPublicId" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pill_taken',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Confirmation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE INDEX "Confirmation_userId_idx" ON "Confirmation"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Confirmation_userId_date_key" ON "Confirmation"("userId", "date");
+
+-- AddForeignKey
+ALTER TABLE "Confirmation" ADD CONSTRAINT "Confirmation_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

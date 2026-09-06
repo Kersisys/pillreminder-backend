@@ -5,6 +5,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { authRouter } from './routes/auth.routes';
 import { cloudinaryRouter } from './routes/cloudinary.routes';
 import { confirmationsRouter } from './routes/confirmations.routes';
+import { devicesRouter } from './routes/devices.routes';
 import { pushRouter } from './routes/push.routes';
 import { reminderRouter } from './routes/reminder.routes';
 import { pillPlanRouter } from './routes/pillPlan.routes';
@@ -45,6 +46,7 @@ app.use('/api/confirmations', confirmationsRouter);
 app.use('/api/reminder-settings', reminderRouter);
 app.use('/api/push-token', pushRouter);
 app.use('/api/pill-plan', pillPlanRouter);
+app.use('/api/devices', devicesRouter);
 
 // Обработчик ошибок обязательно подключается последним — Express находит его
 // по количеству аргументов (4), поэтому порядок регистрации middleware важен.

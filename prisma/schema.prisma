@@ -20,6 +20,7 @@ model User {
   fcmToken              String?
   confirmations         Confirmation[]
   pillPlans             PillPlan[]
+  devices               Device[]
 }
 
 model Confirmation {
@@ -63,5 +64,29 @@ model PillPlan {
   updatedAt    DateTime @updatedAt
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+}
+
+/// Устройства одного аккаунта — нужно, чтобы можно было отключить будильник на
+/// КОНКРЕТНОМ телефоне (например, старом/потерянном), не трогая вход и историю
+/// на нём (см. запрос пользователя — явно НЕ полный разлогин, только звук).
+///
+/// [deviceId] — стабильный UUID, генерируется и хранится локально на телефоне при
+/// первом запуске (НЕ равен id этой записи и НЕ равен userId) — так конкретное
+/// физическое устройство узнаётся при повторных заходах даже после переустановки
+/// токена. [remindersEnabled] — единственное реальное состояние, которым управляет
+/// панель управления; при "удалении" устройства из списка панель не удаляет строку
+/// физически (см. controllers/devices.controller.ts, почему), а гасит этот флаг.
+model Device {
+  id               String   @id @default(uuid())
+  userId           String
+  deviceId         String
+  deviceName       String
+  remindersEnabled Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
   @@index([userId])
 }
